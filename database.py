@@ -91,8 +91,4 @@ def drop_seen_users():
         print('[INFO] Table SEEN_USERS was deleted.')
 
 
-def creating_database():
-    drop_users()
-    drop_seen_users()
-    create_table_users()
-    create_table_seen_users()
+
