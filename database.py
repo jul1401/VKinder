@@ -1,12 +1,26 @@
 import psycopg2
+from psycopg2 import Error
 from config import *
 
-connection = psycopg2.connect(
-    host=host,
-    user=user,
-    password=password,
-    database=db_name
-)
+try:
+    # Подключение к существующей базе данных
+    connection = psycopg2.connect(
+        host=host,
+        user=user,
+        password=password,
+        database=db_name
+    )
+    cursor = connection.cursor()
+    # Выполнение SQL-запроса
+    cursor.execute("SELECT version();")
+    # Получить результат
+    record = cursor.fetchone()
+    print("Вы подключены к - ", record, "\n")
+    cursor.close()
+    connection.rollback()
+except (Exception, Error) as error:
+    print("Ошибка при работе с PostgreSQL", error)
+
 
 connection.autocommit = True
 
@@ -31,7 +45,8 @@ def create_table_seen_users():  # references users(vk_id)
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS seen_users(
             id serial,
-            vk_id varchar(50) PRIMARY KEY);"""
+            vk_id varchar(50) PRIMARY KEY,
+            offset_user varchar(25) NOT NULL);"""
         )
     print("[INFO] Table SEEN_USERS was created.")
 
@@ -40,20 +55,25 @@ def insert_data_users(first_name, last_name, vk_id, vk_link):
     """ВСТАВКА ДАННЫХ В ТАБЛИЦУ USERS"""
     with connection.cursor() as cursor:
         cursor.execute(
-            f"""INSERT INTO users (first_name, last_name, vk_id, vk_link) 
-            VALUES ('{first_name}', '{last_name}', '{vk_id}', '{vk_link}');"""
+            f"""
+            INSERT INTO users (first_name, last_name, vk_id, vk_link) 
+            VALUES ('{first_name}', '{last_name}', '{vk_id}', '{vk_link}')
+            ON CONFLICT (vk_id)
+            DO NOTHING;
+            """
         )
 
 
-def insert_data_seen_users(vk_id, offset):
+def insert_data_seen_users(vk_id, offset_user):
     """ВСТАВКА ДАННЫХ В ТАБЛИЦУ SEEN_USERS"""
     with connection.cursor() as cursor:
         cursor.execute(
-            f"""INSERT INTO seen_users (vk_id) 
-            VALUES ('{vk_id}')
-            OFFSET '{offset}';"""
+            f"""INSERT INTO seen_users (vk_id, offset_user) 
+            VALUES ('{vk_id}', '{offset_user}')
+            ON CONFLICT (vk_id)
+            DO NOTHING;
+            """
         )
-
 
 def select(offset):
     """ВЫБОРКА ИЗ НЕПРОСМОТРЕННЫХ ЛЮДЕЙ"""
@@ -72,23 +92,21 @@ def select(offset):
         )
         return cursor.fetchone()
 
-
-def drop_users():
-    """УДАЛЕНИЕ ТАБЛИЦЫ USERS КАСКАДОМ"""
+def fetchall_user():
     with connection.cursor() as cursor:
-        cursor.execute(
-            """DROP TABLE IF EXISTS users CASCADE;"""
-        )
-        print('[INFO] Table USERS was deleted.')
+        postgreSQL_select_Query = "select * from users"
+        cursor.execute(postgreSQL_select_Query)
+        mobile_records = cursor.fetchall()
+    return mobile_records
 
-
-def drop_seen_users():
-    """УДАЛЕНИЕ ТАБЛИЦЫ SEEN_USERS КАСКАДОМ"""
+def fetchall_seen_user():
     with connection.cursor() as cursor:
-        cursor.execute(
-            """DROP TABLE  IF EXISTS seen_users CASCADE;"""
-        )
-        print('[INFO] Table SEEN_USERS was deleted.')
+        postgreSQL_select_Query = "select * from seen_users"
+        cursor.execute(postgreSQL_select_Query)
+        mobile_records = cursor.fetchall()
+    return mobile_records
 
 
-
+def creating_database():
+    create_table_users()
+    create_table_seen_users()
